@@ -76,7 +76,7 @@ pipeline {
 
                         jq --arg IMAGE "$ECR_URI:$IMAGE_TAG" \
                            /* groovylint-disable-next-line LineLength */
-                           '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+                           '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)'
                            task-definition.json > new-task-definition.json
 
                         aws ecs register-task-definition \
