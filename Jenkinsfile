@@ -2,13 +2,13 @@ pipeline {
     agent any
     environment {
         AWS_REGION = 'us-east-1'
-        ECR_URI = '680464296394.dkr.ecr.us-east-1.amazonaws.com/jenkins-docker-ecr'
+        ECR_URI = '680464296394.dkr.ecr.us-east-1.amazonaws.com/jenkins-fargate'
         IMAGE_TAG = "${BUILD_NUMBER}"
     }
     stages {
         stage('checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Komalgorde/git-Jenkins-docker'
+                git branch: 'main', url: 'https://github.com/Komalgorde/Git-to-ECR.git'
             }
         }
         //stage('Install Dependencies') {
@@ -54,13 +54,53 @@ pipeline {
                 '''
             }
         }
-            stage('Push to ECR..') {
+        stage('Push to ECR..') {
             steps {
                 sh '''
                 docker tag myapp:$IMAGE_TAG $ECR_URI:$IMAGE_TAG
                 docker push $ECR_URI:$IMAGE_TAG
                 '''
             }
+        }
+        stage('Create New Task Definition') {
+            steps {
+                sh '''
+                 aws ecs describe-task-definition \
+                --task-definition $ECS_TASK_FAMILY \
+                --region $AWS_REGION \
+                --query 'taskDefinition' \
+                --output json > task-definition.json
+
+                jq --arg IMAGE "$ECR_URI:$IMAGE_TAG" \
+                '.containerDefinitions[0].image = $IMAGE |
+                del(
+                    .taskDefinitionArn,
+                    .revision,
+                    .status,
+                    .requiresAttributes,
+                    .compatibilities,
+                    .registeredAt,
+                    .registeredBy
+                )' \
+                task-definition.json > new-task-definition.json
+
+                 aws ecs register-task-definition \
+                 --cli-input-json file://new-task-definition.json \
+                 --region $AWS_REGION
+              '''
             }
+        }
+        stage('Deploy to ECS') {
+            steps {
+                    sh ''' aws ecs update-service \
+                    --cluster $ECS_CLUSTER \
+                    --service $ECS_SERVICE \
+                    --task-definition $ECS_TASK_FAMILY \
+                    --region $AWS_REGION aws ecs wait services-stable \
+                    --cluster $ECS_CLUSTER \
+                    --services $ECS_SERVICE \
+                    --region $AWS_REGION '''
+            }
+        }
     }
 }
