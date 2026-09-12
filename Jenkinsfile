@@ -66,7 +66,7 @@ pipeline {
             }
         }
         stage('Create New Task Definition') {
-        steps {
+    steps {
         sh '''
             aws ecs describe-task-definition \
                 --task-definition "$ECS_TASK_FAMILY" \
@@ -75,41 +75,25 @@ pipeline {
                 --output json > task-definition.json
 
             jq --arg IMAGE "$ECR_URI:$IMAGE_TAG" \
-                ".containerDefinitions[0].image = \\$IMAGE" \
+                '.containerDefinitions[0].image = $IMAGE |
+                 del(.taskDefinitionArn,
+                     .revision,
+                     .status,
+                     .requiresAttributes,
+                     .compatibilities,
+                     .registeredAt,
+                     .registeredBy)' \
                 task-definition.json > new-task-definition.json
-
-            python3 - <<'PY'
-            import json
-
-            with open("new-task-definition.json") as f:
-            data = json.load(f)
-
-            for key in [
-                            "taskDefinitionArn",
-                            "revision",
-                            "status",
-                            "requiresAttributes",
-                            "compatibilities",
-                            "registeredAt",
-                            "registeredBy"
-                        ]:
-            data.pop(key, None)
-
-            with open("new-task-definition.json", "w") as f:
-            json.dump(data, f)
-            
-            PY
 
             aws ecs register-task-definition \
                 --cli-input-json file://new-task-definition.json \
                 --region "$AWS_REGION"
         '''
-             }
-
             }
-                stage('Deploy to ECS') {
-                    steps {
-                    sh ''' aws ecs update-service \
+        }
+        stage('Deploy to ECS') {
+            steps {
+                 sh ''' aws ecs update-service \
                     --cluster $ECS_CLUSTER \
                     --service $ECS_SERVICE \
                     --task-definition $ECS_TASK_FAMILY \
