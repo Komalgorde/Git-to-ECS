@@ -66,41 +66,39 @@ pipeline {
             }
         }
         stage('Create New Task Definition') {
-            steps {
-                sh '''
-                 aws ecs describe-task-definition \
-                    --task-definition $ECS_TASK_FAMILY \
-                     --region $AWS_REGION \
-                    --query 'taskDefinition' \
-                    --output json > task-definition.json
+                steps {
+                        sh '''
+                        aws ecs describe-task-definition \
+                        --task-definition "$ECS_TASK_FAMILY" \
+                        --region "$AWS_REGION" \
+                        --query 'taskDefinition' \
+                        --output json > task-definition.json
 
-            jq --arg IMAGE "$ECR_URI:$IMAGE_TAG" \
-                '.containerDefinitions[0].image = $IMAGE |'
-                del(
-                    .taskDefinitionArn,
-                    .revision,
-                    .status,
-                    .requiresAttributes,
-                    .compatibilities,
-                    .registeredAt,
-                    .registeredBy
-                )' \
-                task-definition.json > new-task-definition.json
+                        jq --arg IMAGE "$ECR_URI:$IMAGE_TAG" \
+                        '.containerDefinitions[0].image = $IMAGE |'
+                        del(.taskDefinitionArn,
+                        .revision,
+                        .status,
+                        .requiresAttributes,
+                        .compatibilities,
+                        .registeredAt,
+                        .registeredBy)' \
+                        task-definition.json > new-task-definition.json
 
-                 aws ecs register-task-definition \
-                 --cli-input-json file://new-task-definition.json \
-                 --region $AWS_REGION
-              '''
-            }
-        }
-        stage('Deploy to ECS') {
-            steps {
+                        aws ecs register-task-definition \
+                        --cli-input-json file://new-task-definition.json \
+                        --region "$AWS_REGION"
+                        '''
+                    }
+                }
+                stage('Deploy to ECS') {
+                    steps {
                     sh ''' aws ecs update-service \
                     --cluster $ECS_CLUSTER \
                     --service $ECS_SERVICE \
                     --task-definition $ECS_TASK_FAMILY \
-                    --region $AWS_REGION 
-                    
+                    --region $AWS_REGION
+
                 aws ecs wait services-stable \
                     --cluster $ECS_CLUSTER \
                     --services $ECS_SERVICE \
