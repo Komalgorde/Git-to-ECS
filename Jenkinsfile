@@ -8,7 +8,7 @@ pipeline {
     stages {
         stage('checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/Komalgorde/Git-to-ECR.git'
+                git branch: 'main', url: 'https://github.com/Komalgorde/Git-to-ECS.git'
             }
         }
         //stage('Install Dependencies') {
