@@ -66,34 +66,47 @@ pipeline {
             }
         }
         stage('Create New Task Definition') {
-            steps {
-                sh '''
+        steps {
+        sh '''
             aws ecs describe-task-definition \
-            --task-definition "$ECS_TASK_FAMILY" \
-            --region "$AWS_REGION" \
-            --query 'taskDefinition' \
-            --output json > task-definition.json
+                --task-definition "$ECS_TASK_FAMILY" \
+                --region "$AWS_REGION" \
+                --query 'taskDefinition' \
+                --output json > task-definition.json
 
-            IMAGE="$ECR_URI:$IMAGE_TAG"
+            jq --arg IMAGE "$ECR_URI:$IMAGE_TAG" \
+                ".containerDefinitions[0].image = \\$IMAGE" \
+                task-definition.json > new-task-definition.json
 
-            jq --arg image "$IMAGE" \
-            '.containerDefinitions[0].image = $image' \
-            task-definition.json > new-task-definition.json
+            python3 - <<'PY'
+            import json
 
-            sed -i '/"taskDefinitionArn":/d' new-task-definition.json
-            sed -i '/"revision":/d' new-task-definition.json
-            sed -i '/"status":/d' new-task-definition.json
-            sed -i '/"requiresAttributes":/d' new-task-definition.json
-            sed -i '/"compatibilities":/d' new-task-definition.json
-            sed -i '/"registeredAt":/d' new-task-definition.json
-            sed -i '/"registeredBy":/d' new-task-definition.json
+            with open("new-task-definition.json") as f:
+            data = json.load(f)
+
+            for key in [
+                            "taskDefinitionArn",
+                            "revision",
+                            "status",
+                            "requiresAttributes",
+                            "compatibilities",
+                            "registeredAt",
+                            "registeredBy"
+                        ]:
+            data.pop(key, None)
+
+            with open("new-task-definition.json", "w") as f:
+            json.dump(data, f)
+            
+            PY
 
             aws ecs register-task-definition \
-            --cli-input-json file://new-task-definition.json \
-            --region "$AWS_REGION"
+                --cli-input-json file://new-task-definition.json \
+                --region "$AWS_REGION"
         '''
-    }
-}
+             }
+
+            }
                 stage('Deploy to ECS') {
                     steps {
                     sh ''' aws ecs update-service \
